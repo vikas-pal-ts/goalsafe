@@ -1,10 +1,20 @@
-"""GoalSafe Backend — FastAPI application entry point."""
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.health import router as health_router
 from app.api.routes.analyze import router as analyze_router
+from app.api.routes.requests import router as requests_router
+from app.api.routes.expenses import router as expenses_router
+from app.api.routes.goals import router as goals_router
+from app.api.routes.users import router as users_router
+from app.api.routes.home import router as home_router
+
+from app.db.database import Base, engine
+from app.models.request import FinancialRequest
+from app.models.goals import Goal
+
+# Initialize database
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="GoalSafe API",
@@ -29,3 +39,8 @@ app.add_middleware(
 
 app.include_router(health_router, prefix="/api")
 app.include_router(analyze_router, prefix="/api")
+app.include_router(requests_router, prefix="/api/requests", tags=["requests"])
+app.include_router(expenses_router, prefix="/api/expenses", tags=["expenses"])
+app.include_router(goals_router, prefix="/api/goals", tags=["goals"])
+app.include_router(users_router, prefix="/api/users", tags=["users"])
+app.include_router(home_router, prefix="/api/home", tags=["home"])

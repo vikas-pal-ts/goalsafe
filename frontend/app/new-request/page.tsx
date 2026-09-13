@@ -8,17 +8,23 @@ import {
   ArrowRight, Sparkles, WalletCards, Shield, Target, LockKeyhole, 
   Info, ArrowLeft 
 } from "lucide-react";
+import { createRequest, getRequest, updateRequest, analyzeSavedRequest } from "../../lib/api";
 
 function NewRequestForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const stepParam = searchParams.get("step");
+  const requestIdParam = searchParams.get("requestId");
   
   const [step, setStep] = useState(stepParam === "2" ? 2 : 1);
+  const [requestId, setRequestId] = useState<string | null>(requestIdParam);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState("");
+
   const [description, setDescription] = useState("");
   const [requestType, setRequestType] = useState("Purchase");
-  const [amount, setAmount] = useState("80,000");
-  const [desiredDate, setDesiredDate] = useState("15 Sep 2025");
+  const [amount, setAmount] = useState("80000");
+  const [desiredDate, setDesiredDate] = useState("2025-09-15");
   const [deadline, setDeadline] = useState("");
   const [paymentPreference, setPaymentPreference] = useState("No preference");
   const [additionalContext, setAdditionalContext] = useState("");
@@ -27,16 +33,90 @@ function NewRequestForm() {
     setStep(stepParam === "2" ? 2 : 1);
   }, [stepParam]);
 
-  const goToStep2 = () => {
-    router.push("/new-request?step=2");
+  useEffect(() => {
+    if (requestIdParam) {
+      setRequestId(requestIdParam);
+      setIsLoading(true);
+      setLoadingText("Loading request...");
+      getRequest(requestIdParam).then(data => {
+        setDescription(data.description);
+        setRequestType(data.request_type);
+        setAmount(data.amount.toString());
+        setDesiredDate(data.desired_date);
+        setDeadline(data.deadline || "");
+        setPaymentPreference(data.payment_preference);
+        setAdditionalContext(data.additional_context || "");
+      }).finally(() => {
+        setIsLoading(false);
+      });
+    }
+  }, [requestIdParam]);
+
+  const saveDraftData = async () => {
+    const payload = {
+      description: description || "New request",
+      request_type: requestType,
+      amount: amount.replace(/,/g, ''),
+      desired_date: desiredDate,
+      deadline: deadline || null,
+      payment_preference: paymentPreference,
+      additional_context: additionalContext || null,
+    };
+    if (requestId) {
+      return await updateRequest(requestId, payload);
+    } else {
+      return await createRequest(payload);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    setIsLoading(true);
+    setLoadingText("Saving...");
+    try {
+      const data = await saveDraftData();
+      setRequestId(data.id);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save draft");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const goToStep2 = async () => {
+    setIsLoading(true);
+    setLoadingText("Saving...");
+    try {
+      const data = await saveDraftData();
+      router.push(`/new-request?step=2&requestId=${data.id}`);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const goToStep1 = () => {
-    router.push("/new-request");
+    if (requestId) {
+      router.push(`/new-request?requestId=${requestId}`);
+    } else {
+      router.push("/new-request");
+    }
   };
 
-  const handleAnalyze = () => {
-    router.push("/analyze?q=" + encodeURIComponent(description || "Can I afford a new laptop for ₹80,000?"));
+  const handleAnalyze = async () => {
+    if (!requestId) return;
+    setIsLoading(true);
+    setLoadingText("Analyzing your request...");
+    try {
+      await analyzeSavedRequest(requestId);
+      router.push(`/analyze?requestId=${requestId}`);
+    } catch (e) {
+      console.error(e);
+      alert("Analysis failed");
+      setIsLoading(false);
+    }
   };
 
   const requestTypes = [
@@ -48,6 +128,14 @@ function NewRequestForm() {
     { id: "Investment", icon: ChartNoAxesCombined },
   ];
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <p className="text-muted">{loadingText}</p>
+      </div>
+    );
+  }
+
   if (step === 2) {
     return (
       <section className="">
@@ -58,13 +146,6 @@ function NewRequestForm() {
               <h1 className="mt-2 text-[30px] font-semibold tracking-[-.025em]">Ready for MoneyMind to decide?</h1>
               <p className="mt-2 text-[14px] text-muted">Review the details below before running the financial decision analysis.</p>
             </div>
-            {/* <div className="hidden md:flex items-center gap-2 text-[11px] text-muted">
-              <span className="w-7 h-7 rounded-full bg-[#DCEEE9] text-teal flex items-center justify-center">✓</span>
-              <span>Request</span>
-              <span className="step w-10"></span>
-              <span className="w-7 h-7 rounded-full bg-teal text-white flex items-center justify-center">2</span>
-              <span>Review</span>
-            </div> */}
           </div>
           <div className="mt-8 grid grid-cols-[minmax(0,620px)_270px] gap-5 items-start">
             <div className="space-y-4">
@@ -185,13 +266,6 @@ function NewRequestForm() {
             <h1 className="mt-2 text-[30px] font-semibold tracking-[-.025em]">What are you planning?</h1>
             <p className="mt-2 text-[14px] text-muted">Tell MoneyMind what you're considering. We'll check it against your cash flow and upcoming commitments.</p>
           </div>
-          {/* <div className="hidden md:flex items-center gap-2 text-[11px] text-muted">
-            <span className="w-7 h-7 rounded-full bg-teal text-white flex items-center justify-center font-semibold">1</span>
-            <span>Request</span>
-            <span className="step w-10"></span>
-            <span className="w-7 h-7 rounded-full bg-[#EDF1F2] flex items-center justify-center">2</span>
-            <span>Review</span>
-          </div> */}
         </div>
         <div className="mt-8 grid grid-cols-[minmax(0,620px)_270px] gap-5 items-start">
           <div className="bg-white border border-line rounded-[16px] shadow-card p-6">
@@ -247,9 +321,9 @@ function NewRequestForm() {
                   <input 
                     value={desiredDate} 
                     onChange={(e) => setDesiredDate(e.target.value)}
+                    type="date"
                     className="w-full outline-none text-[13px] bg-transparent" 
                   />
-                  <CalendarDays className="w-4 text-muted shrink-0" />
                 </div>
               </div>
             </div>
@@ -260,10 +334,9 @@ function NewRequestForm() {
                   <input 
                     value={deadline}
                     onChange={(e) => setDeadline(e.target.value)}
-                    placeholder="When must this be completed?" 
+                    type="date"
                     className="w-full outline-none text-[12px] placeholder:text-muted bg-transparent" 
                   />
-                  <CalendarRange className="w-4 text-muted shrink-0" />
                 </div>
               </div>
               <div>
@@ -273,10 +346,10 @@ function NewRequestForm() {
                   onChange={(e) => setPaymentPreference(e.target.value)}
                   className="mt-2 w-full h-11 rounded-lg border border-line px-3.5 outline-none text-[12px] text-body bg-transparent focus:border-[#A8D2C8] focus:ring-2 focus:ring-[#EAF5F2]"
                 >
-                  <option>No preference</option>
-                  <option>Pay in full</option>
-                  <option>Installments</option>
-                  <option>Wait if safer</option>
+                  <option value="No preference">No preference</option>
+                  <option value="Pay in full">Pay in full</option>
+                  <option value="Installments">Installments</option>
+                  <option value="Wait if safer">Wait if safer</option>
                 </select>
               </div>
             </div>
@@ -296,7 +369,7 @@ function NewRequestForm() {
               </p>
             </div>
             <div className="mt-6 flex justify-between">
-              <button className="h-11 px-4 rounded-lg border border-line text-[12px] font-medium text-body hover:bg-slate-50 transition">
+              <button onClick={handleSaveDraft} className="h-11 px-4 rounded-lg border border-line text-[12px] font-medium text-body hover:bg-slate-50 transition">
                 Save as draft
               </button>
               <button onClick={goToStep2} className="h-11 px-5 rounded-lg bg-teal text-white text-[12px] font-semibold flex items-center gap-2 hover:bg-tealDark transition">

@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { analyzeFinancialRequest } from "@/lib/api";
+import { useUser } from "@/components/providers/UserProvider";
 import type { AnalyzeResponse, AffordabilityStatus } from "@/lib/types";
 import { DEMO_RESPONSE } from "@/lib/mock-data";
 import { 
@@ -105,18 +106,39 @@ function AnalyzeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const query = searchParams.get("q") ?? "";
+  const requestId = searchParams.get("requestId") ?? "";
 
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const { selectedUser } = useUser();
+
   useEffect(() => {
-    if (!query) { setLoading(false); return; }
-    setLoading(true);
-    analyzeFinancialRequest({ user_query: query })
-      .then(setData)
-      .catch(() => setData(DEMO_RESPONSE)) // graceful fallback to demo
-      .finally(() => setLoading(false));
-  }, [query]);
+    if (!selectedUser) return;
+    if (requestId) {
+      setLoading(true);
+      import("@/lib/api").then(({ getRequest }) => {
+        getRequest(requestId)
+          .then((res) => {
+            if (res.decision_data) {
+              setData(res.decision_data);
+            } else {
+              setData(DEMO_RESPONSE);
+            }
+          })
+          .catch(() => setData(DEMO_RESPONSE))
+          .finally(() => setLoading(false));
+      });
+    } else if (query) {
+      setLoading(true);
+      analyzeFinancialRequest({ user_query: query })
+        .then(setData)
+        .catch(() => setData(DEMO_RESPONSE)) // graceful fallback to demo
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, [query, requestId, selectedUser]);
 
   if (loading) {
     return (
@@ -130,7 +152,7 @@ function AnalyzeContent() {
   }
 
   const d = data ?? DEMO_RESPONSE;
-  const statusCfg = STATUS_CONFIG[d.decision.status];
+  const statusCfg = STATUS_CONFIG[d.decision.status] || STATUS_CONFIG["not_affordable"];
   const snap = d.financial_snapshot;
   const StatusIcon = statusCfg.icon;
 

@@ -11,8 +11,8 @@ export default function SidebarNav() {
     { name: "Home", href: "/", icon: House },
     { name: "New Request", href: "/new-request", icon: CirclePlus },
     { name: "History", href: "/history", icon: Clock3 },
-    { name: "Profile", href: "/profile", icon: UserRound },
-    { name: "Settings", href: "/settings", icon: Settings2 },
+    { name: "Goals", href: "/goals", icon: UserRound },
+    { name: "Current Expenses", href: "/current-expenses", icon: Settings2 },
   ];
 
   return (

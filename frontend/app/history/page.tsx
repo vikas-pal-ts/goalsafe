@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -14,10 +14,15 @@ import {
   ChevronRight,
   Activity,
   CircleCheck,
-  CalendarClock
+  CalendarClock,
+  ShoppingBag,
+  ChartNoAxesCombined
 } from "lucide-react";
+import { listRequests } from "../../lib/api";
+import { useUser } from "@/components/providers/UserProvider";
+import { RequestResponse } from "../../lib/types";
 
-type DecisionStatus = "Affordable now" | "Affordable with plan" | "Affordable later" | "Not affordable";
+type DecisionStatus = "Affordable now" | "Affordable with plan" | "Affordable later" | "Not affordable" | "Draft";
 
 interface Decision {
   id: string;
@@ -32,70 +37,31 @@ interface Decision {
   icon: any;
 }
 
-const DEMO_DATA: Decision[] = [
-  {
-    id: "1",
-    question: "Can I afford this laptop?",
-    type: "Purchase",
-    dateStr: "10 Aug 2025",
-    date: new Date("2025-08-10"),
-    amountStr: "₹80,000",
-    amount: 80000,
-    status: "Affordable now",
-    description: "Purchase · Structured payment plan",
-    icon: Laptop,
-  },
-  {
-    id: "2",
-    question: "Is it safe to travel now?",
-    type: "Travel",
-    dateStr: "05 Aug 2025",
-    date: new Date("2025-08-05"),
-    amountStr: "₹25,000",
-    amount: 25000,
-    status: "Affordable later",
-    description: "Travel · Waited for better timing",
-    icon: Plane,
-  },
-  {
-    id: "3",
-    question: "Should I take a home loan?",
-    type: "Housing",
-    dateStr: "28 Jul 2025",
-    date: new Date("2025-07-28"),
-    amountStr: "₹45,00,000",
-    amount: 4500000,
-    status: "Affordable with plan",
-    description: "Housing · Scenario comparison",
-    icon: House,
-  },
-  {
-    id: "4",
-    question: "Can I repay my credit card?",
-    type: "Debt",
-    dateStr: "20 Jul 2025",
-    date: new Date("2025-07-20"),
-    amountStr: "₹18,500",
-    amount: 18500,
-    status: "Affordable now",
-    description: "Debt repayment · Full payment",
-    icon: CreditCard,
-  },
-  {
-    id: "5",
-    question: "Can I send money home?",
-    type: "Family",
-    dateStr: "12 Jul 2025",
-    date: new Date("2025-07-12"),
-    amountStr: "₹20,000",
-    amount: 20000,
-    status: "Affordable now",
-    description: "Family transfer · Full payment",
-    icon: UsersRound,
-  },
-];
+const mapIcon = (type: string) => {
+  switch (type) {
+    case "Purchase": return ShoppingBag;
+    case "Travel": return Plane;
+    case "Housing": return House;
+    case "Debt repayment": return CreditCard;
+    case "Family transfer": return UsersRound;
+    case "Investment": return ChartNoAxesCombined;
+    default: return Laptop;
+  }
+};
 
-type FilterType = "All" | "Affordable now" | "With plan" | "Later" | "Not affordable";
+const mapStatus = (status: string, decisionData: any): DecisionStatus => {
+  if (status !== "analyzed" || !decisionData) return "Draft";
+  const ds = decisionData.decision?.status;
+  switch (ds) {
+    case "affordable_now": return "Affordable now";
+    case "affordable_with_plan": return "Affordable with plan";
+    case "affordable_later": return "Affordable later";
+    case "not_affordable": return "Not affordable";
+    default: return "Draft";
+  }
+};
+
+type FilterType = "All" | "Affordable now" | "With plan" | "Later" | "Not affordable" | "Draft";
 type SortType = "Newest first" | "Oldest first" | "Highest amount";
 
 export default function HistoryPage() {
@@ -103,9 +69,35 @@ export default function HistoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<FilterType>("All");
   const [sort, setSort] = useState<SortType>("Newest first");
+  const [requests, setRequests] = useState<Decision[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const { selectedUser } = useUser();
+
+  useEffect(() => {
+    if (!selectedUser) return;
+    setIsLoading(true);
+    listRequests().then((res) => {
+      const data = res.items.map((req) => ({
+        id: req.id,
+        question: req.description,
+        type: req.request_type,
+        dateStr: new Date(req.created_at).toLocaleDateString("en-GB", {
+          day: "2-digit", month: "short", year: "numeric"
+        }),
+        date: new Date(req.created_at),
+        amountStr: `₹${Number(req.amount).toLocaleString("en-IN")}`,
+        amount: Number(req.amount),
+        status: mapStatus(req.status, req.decision_data),
+        description: req.request_type,
+        icon: mapIcon(req.request_type),
+      }));
+      setRequests(data);
+    }).finally(() => setIsLoading(false));
+  }, [selectedUser]);
 
   const filteredAndSortedData = useMemo(() => {
-    let result = DEMO_DATA;
+    let result = requests;
 
     // Search filter
     if (searchQuery.trim()) {
@@ -126,6 +118,7 @@ export default function HistoryPage() {
       if (filter === "With plan") mappedStatus = "Affordable with plan";
       if (filter === "Later") mappedStatus = "Affordable later";
       if (filter === "Not affordable") mappedStatus = "Not affordable";
+      if (filter === "Draft") mappedStatus = "Draft";
 
       if (mappedStatus) {
         result = result.filter((item) => item.status === mappedStatus);
@@ -145,11 +138,10 @@ export default function HistoryPage() {
     });
 
     return result;
-  }, [searchQuery, filter, sort]);
+  }, [searchQuery, filter, sort, requests]);
 
   const handleRowClick = (id: string) => {
-    // Placeholder navigation strategy
-    router.push(`/analyze?q=${id}`);
+    router.push(`/analyze?requestId=${id}`);
   };
 
   const renderStatusBadge = (status: DecisionStatus) => {
@@ -162,6 +154,8 @@ export default function HistoryPage() {
       classes = "bg-amberSoft text-amber";
     } else if (status === "Not affordable") {
       classes = "bg-red-50 text-red-600";
+    } else if (status === "Draft") {
+      classes = "bg-slate-100 text-slate-500";
     }
     return (
       <span className={`w-fit px-2.5 py-1 rounded-full text-[9px] font-semibold ${classes}`}>
@@ -180,24 +174,24 @@ export default function HistoryPage() {
               <span className="text-[10px] text-muted">Decisions this month</span>
               <Activity className="w-4 text-teal" />
             </div>
-            <p className="mt-2 text-[20px] font-semibold">4</p>
-            <p className="mt-1 text-[10px] text-muted">Across purchases and travel</p>
+            <p className="mt-2 text-[20px] font-semibold">{requests.filter(r => r.status !== "Draft").length}</p>
+            <p className="mt-1 text-[10px] text-muted">Completed analysis requests</p>
           </div>
           <div className="bg-white border border-line rounded-[14px] p-4 shadow-card">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-muted">Most common outcome</span>
               <CircleCheck className="w-4 text-teal" />
             </div>
-            <p className="mt-2 text-[15px] font-semibold text-teal">Affordable now</p>
-            <p className="mt-1 text-[10px] text-muted">6 of your recent decisions</p>
+            <p className="mt-2 text-[15px] font-semibold text-teal">Affordable</p>
+            <p className="mt-1 text-[10px] text-muted">Based on your recent decisions</p>
           </div>
           <div className="bg-white border border-line rounded-[14px] p-4 shadow-card">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-muted">Plans currently active</span>
               <CalendarClock className="w-4 text-blue" />
             </div>
-            <p className="mt-2 text-[20px] font-semibold">2</p>
-            <p className="mt-1 text-[10px] text-muted">Next payment · 10 Dec 2025</p>
+            <p className="mt-2 text-[20px] font-semibold">0</p>
+            <p className="mt-1 text-[10px] text-muted">Tracked payment plans</p>
           </div>
         </div>
         {/* Header */}
@@ -243,7 +237,7 @@ export default function HistoryPage() {
         {/* Active filters / status tabs */}
         <div className="mt-4 flex items-center justify-between">
           <div className="flex gap-2 flex-wrap">
-            {(["All", "Affordable now", "With plan", "Later", "Not affordable"] as FilterType[]).map((f) => (
+            {(["All", "Affordable now", "With plan", "Later", "Not affordable", "Draft"] as FilterType[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -253,7 +247,7 @@ export default function HistoryPage() {
                     : "bg-white border border-line text-body hover:bg-slate-50"
                 }`}
               >
-                {f} {f === "All" && <span className="ml-1 opacity-70">{DEMO_DATA.length}</span>}
+                {f} {f === "All" && <span className="ml-1 opacity-70">{requests.length}</span>}
               </button>
             ))}
           </div>
@@ -268,7 +262,11 @@ export default function HistoryPage() {
             </div>
 
             <div className="divide-y divide-[#E9EEF0]">
-              {filteredAndSortedData.length > 0 ? (
+              {isLoading ? (
+                 <div className="flex flex-col items-center justify-center py-16 text-center">
+                   <p className="text-[14px] font-semibold">Loading history...</p>
+                 </div>
+              ) : filteredAndSortedData.length > 0 ? (
                 filteredAndSortedData.map((item) => (
                   <button 
                     key={item.id}
@@ -302,8 +300,6 @@ export default function HistoryPage() {
             </div>
           </div>
         </div>
-
-       
       </div>
     </section>
   );

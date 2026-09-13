@@ -12,7 +12,12 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 class AnalyzeRequest(BaseModel):
+    request_id: str
+    user_id: str
     user_query: str = Field(..., description="Natural language financial question from the user")
+    amount: float
+    desired_date: str
+    payment_preference: str
 
 
 # ---------------------------------------------------------------------------

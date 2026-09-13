@@ -124,3 +124,100 @@ export interface AnalyzeResponse {
   explanation: string;
   educational_resources: EducationalResource[];
 }
+
+// ---------------------------------------------------------------------------
+// Request Management
+// ---------------------------------------------------------------------------
+
+export type RequestStatus = "draft" | "ready_for_review" | "submitted" | "analyzed";
+
+export interface RequestDraft {
+  description: string;
+  request_type: string;
+  amount: string;
+  desired_date: string;
+  deadline?: string | null;
+  payment_preference: string;
+  additional_context?: string | null;
+  user_id?: string;
+}
+
+export interface RequestResponse {
+  id: string;
+  description: string;
+  request_type: string;
+  amount: string;
+  desired_date: string;
+  deadline: string | null;
+  payment_preference: string;
+  additional_context: string | null;
+  status: RequestStatus;
+  created_at: string;
+  updated_at: string;
+  submitted_at: string | null;
+  decision_data?: AnalyzeResponse | null;
+}
+
+export interface PaginatedRequestResponse {
+  items: RequestResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+// ---------------------------------------------------------------------------
+// Expenses
+// ---------------------------------------------------------------------------
+
+export interface ExpenseItem {
+  id: string;
+  name: string;
+  category: string;
+  amount: number;
+  currency: string;
+  frequency: string;
+  next_date: string;
+  flexibility: string;
+  is_protected: boolean;
+}
+
+export interface ExpenseSummary {
+  total_relevant: number;
+  protected_total: number;
+  flexible_total: number;
+}
+
+export interface ExpensesResponse {
+  items: ExpenseItem[];
+  summary: ExpenseSummary;
+}
+
+// ---------------------------------------------------------------------------
+// Goals
+// ---------------------------------------------------------------------------
+
+export interface GoalDraft {
+  name: string;
+  target_amount: string;
+  current_amount?: string;
+  target_date: string;
+  priority?: "high" | "medium" | "low";
+  status?: "active" | "completed" | "paused";
+  user_id?: string;
+}
+
+export interface GoalResponse {
+  id: string;
+  name: string;
+  target_amount: string;
+  current_amount: string;
+  target_date: string;
+  priority: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GoalListResponse {
+  items: GoalResponse[];
+}
